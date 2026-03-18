@@ -39,32 +39,39 @@ bench() {
 }
 
 # --- Produce events ---
-echo "=== Trino vs StarRocks Benchmark ==="
+echo "=== Trino vs StarRocks Benchmark (event_result with resolved features) ==="
 echo "Producing $EVENT_COUNT events..."
 ./produce-events.sh "$EVENT_COUNT"
 echo "Waiting 30s for Iceberg commit..."
 sleep 30
 
+# --- Warmup (cold start: metadata fetch, S3 client init, Parquet footer parse) ---
+echo "Warming up engines (first query is slow due to metadata/S3 cache cold start)..."
+run_trino "SELECT count(*) FROM iceberg.demo.event_result"
+run_starrocks "SELECT count(*) FROM demo.event_result"
+echo "Warmup complete."
+echo ""
+
 # --- Define queries ---
 declare -a QUERY_NAMES=(
   "Full Scan (count)"
-  "Aggregation (group by)"
-  "Filter (purchase > 200)"
-  "Top-N (top 10 users)"
+  "Aggregation (by country)"
+  "Filter (new user + high txn)"
+  "Top-N (top 10 users by txn)"
 )
 
 declare -a TRINO_QUERIES=(
-  "SELECT count(*) FROM iceberg.demo.events"
-  "SELECT event_type, count(*) AS cnt, sum(amount) AS total FROM iceberg.demo.events GROUP BY event_type"
-  "SELECT * FROM iceberg.demo.events WHERE event_type = 'purchase' AND amount > 200"
-  "SELECT user_id, count(*) AS cnt FROM iceberg.demo.events GROUP BY user_id ORDER BY cnt DESC LIMIT 10"
+  "SELECT count(*) FROM iceberg.demo.event_result"
+  "SELECT country, count(*) AS cnt, sum(amount) AS total FROM iceberg.demo.event_result GROUP BY country"
+  "SELECT * FROM iceberg.demo.event_result WHERE is_new_user = true AND transaction_amount > 5000"
+  "SELECT user_id, count(*) AS cnt, sum(transaction_amount) AS total FROM iceberg.demo.event_result GROUP BY user_id ORDER BY total DESC LIMIT 10"
 )
 
 declare -a SR_QUERIES=(
-  "SELECT count(*) FROM demo.events"
-  "SELECT event_type, count(*) AS cnt, sum(amount) AS total FROM demo.events GROUP BY event_type"
-  "SELECT * FROM demo.events WHERE event_type = 'purchase' AND amount > 200"
-  "SELECT user_id, count(*) AS cnt FROM demo.events GROUP BY user_id ORDER BY cnt DESC LIMIT 10"
+  "SELECT count(*) FROM demo.event_result"
+  "SELECT country, count(*) AS cnt, sum(amount) AS total FROM demo.event_result GROUP BY country"
+  "SELECT * FROM demo.event_result WHERE is_new_user = true AND transaction_amount > 5000"
+  "SELECT user_id, count(*) AS cnt, sum(transaction_amount) AS total FROM demo.event_result GROUP BY user_id ORDER BY total DESC LIMIT 10"
 )
 
 # --- Run benchmarks ---

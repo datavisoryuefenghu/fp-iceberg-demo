@@ -12,14 +12,14 @@ until curl -sf "$CONNECT_URL/connectors" > /dev/null 2>&1; do
 done
 echo "Kafka Connect is ready."
 
-echo "Registering Iceberg sink connector..."
+echo "Registering Iceberg sink connector with Feature Resolver SMT..."
 curl -s -X PUT "$CONNECT_URL/connectors/iceberg-sink/config" \
   -H "Content-Type: application/json" \
   -d '{
     "connector.class": "org.apache.iceberg.connect.IcebergSinkConnector",
     "tasks.max": "1",
-    "topics": "events",
-    "iceberg.tables": "demo.events",
+    "topics": "velocity-al",
+    "iceberg.tables": "demo.event_result",
     "iceberg.tables.auto-create-enabled": "true",
     "iceberg.catalog.type": "rest",
     "iceberg.catalog.uri": "http://iceberg-rest:8181",
@@ -32,10 +32,18 @@ curl -s -X PUT "$CONNECT_URL/connectors/iceberg-sink/config" \
     "iceberg.control.commit.interval-ms": "10000",
     "key.converter": "org.apache.kafka.connect.storage.StringConverter",
     "value.converter": "org.apache.kafka.connect.json.JsonConverter",
-    "value.converter.schemas.enable": "true"
+    "value.converter.schemas.enable": "false",
+
+    "transforms": "resolveFeatures",
+    "transforms.resolveFeatures.type": "com.datavisor.demo.smt.FeatureResolverTransform",
+    "transforms.resolveFeatures.metadata.jdbc.url": "jdbc:mysql://mysql:3306/'"$MYSQL_DATABASE"'",
+    "transforms.resolveFeatures.metadata.jdbc.user": "'"$MYSQL_USER"'",
+    "transforms.resolveFeatures.metadata.jdbc.password": "'"$MYSQL_PASSWORD"'",
+    "transforms.resolveFeatures.metadata.refresh.interval.ms": "60000",
+    "transforms.resolveFeatures.feature.map.field": "featureMap"
   }' | python3 -m json.tool
 
 echo ""
 echo "Connector registered. Checking status..."
-sleep 2
+sleep 5
 curl -s "$CONNECT_URL/connectors/iceberg-sink/status" | python3 -m json.tool

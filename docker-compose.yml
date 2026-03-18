@@ -76,12 +76,14 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - mysql-data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
     networks:
       - iceberg-net
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD-SHELL", "mysql -u ${MYSQL_USER} -p${MYSQL_PASSWORD} -e 'SELECT 1 FROM ${MYSQL_DATABASE}.feature LIMIT 1' 2>/dev/null || exit 1"]
       interval: 5s
       timeout: 5s
+      start_period: 30s
       retries: 10
 
   iceberg-rest:
@@ -136,7 +138,7 @@ services:
       CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
       CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
       CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "true"
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
       CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
       CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}

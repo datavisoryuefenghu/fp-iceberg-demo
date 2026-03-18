@@ -1,2 +1,10 @@
+FROM maven:3.9-eclipse-temurin-17 AS smt-build
+WORKDIR /build
+COPY smt/pom.xml .
+RUN mvn dependency:go-offline -q
+COPY smt/src ./src
+RUN mvn package -DskipTests -q
+
 FROM confluentinc/cp-kafka-connect-base:7.7.1
 RUN confluent-hub install --no-prompt iceberg/iceberg-kafka-connect:1.9.2
+COPY --from=smt-build /build/target/fp-feature-smt-1.0-SNAPSHOT.jar /usr/share/java/fp-feature-smt/fp-feature-smt.jar
