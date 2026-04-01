@@ -18,7 +18,7 @@ trino_query "DESCRIBE iceberg.demo.event_result"
 
 echo ""
 echo "=== Sample rows ==="
-trino_query "SELECT event_id, event_type, user_id, amount, country, is_new_user, transaction_amount FROM iceberg.demo.event_result LIMIT 5"
+trino_query "SELECT event_id, event_type, user_id, event_time, processing_time, amount, country, transaction_id, merchant_id, direction FROM iceberg.demo.event_result LIMIT 5"
 
 echo ""
 echo "=== Aggregation by country ==="
@@ -32,7 +32,7 @@ docker exec starrocks mysql -P 9030 -h 127.0.0.1 -u root --table -e "SET CATALOG
 
 echo ""
 echo "=== Sample rows ==="
-docker exec starrocks mysql -P 9030 -h 127.0.0.1 -u root --table -e "SET CATALOG iceberg_catalog; SELECT event_id, event_type, user_id, amount, country, is_new_user, transaction_amount FROM demo.event_result LIMIT 5;"
+docker exec starrocks mysql -P 9030 -h 127.0.0.1 -u root --table -e "SET CATALOG iceberg_catalog; SELECT event_id, event_type, user_id, event_time, processing_time, amount, country, transaction_id, merchant_id, direction FROM demo.event_result LIMIT 5;"
 
 echo ""
 echo "=== Aggregation by country ==="

@@ -35,7 +35,7 @@ curl -s -X PUT "$CONNECT_URL/connectors/iceberg-sink/config" \
     "value.converter.schemas.enable": "false",
 
     "transforms": "resolveFeatures",
-    "transforms.resolveFeatures.type": "com.datavisor.demo.smt.FeatureResolverTransform",
+    "transforms.resolveFeatures.type": "com.datavisor.smt.FeatureResolverTransform",
     "transforms.resolveFeatures.metadata.jdbc.url": "jdbc:mysql://mysql:3306/'"$MYSQL_DATABASE"'",
     "transforms.resolveFeatures.metadata.jdbc.user": "'"$MYSQL_USER"'",
     "transforms.resolveFeatures.metadata.jdbc.password": "'"$MYSQL_PASSWORD"'",

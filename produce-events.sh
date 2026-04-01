@@ -27,12 +27,19 @@ for i in range(n):
     etype = random.choice(event_types)
     evt_time = base_time - random.randint(0, 86400000)
     proc_time = evt_time + random.randint(1, 50)
+    amount = round(random.uniform(0, 999.99), 2)
+    country = random.choice(countries)
+    txn_id = f'txn_{i:06d}'
+    merchant = random.choice(merchants)
+    card = random.choice(cards)
+    direction = random.choice(['DEBIT', 'CREDIT'])
+    category = random.choice(['electronics', 'grocery', 'travel', 'gaming', 'clothing'])
 
     # featureMap with integer keys matching the feature table
     feature_map = {
         '1':   evt_time,                                    # time (Long)
-        '7':   random.choice(countries),                    # country (String)
-        '8':   round(random.uniform(0, 999.99), 2),        # amount (Double)
+        '7':   country,                                     # country (String)
+        '8':   amount,                                      # amount (Double)
         '9':   uid,                                         # user_id (String)
         '13':  etype,                                       # event_type (String)
         '34':  random.choice([True, False]),                 # is_new_user (Boolean)
@@ -53,19 +60,43 @@ for i in range(n):
     if random.random() > 0.4:
         feature_map['120'] = round(random.uniform(150.0, 200.0), 1)  # height_float (Float)
     if random.random() > 0.5:
-        feature_map['591'] = random.choice(cards)            # card_number (String)
+        feature_map['591'] = card                            # card_number (String)
     if random.random() > 0.5:
-        feature_map['593'] = random.choice(merchants)        # merchant_id (String)
+        feature_map['593'] = merchant                        # merchant_id (String)
     if random.random() > 0.5:
         feature_map['595'] = random.randint(3600000, 86400000)  # kg_window (Long)
 
+    # eventFields: event_attribute_info id keys, values always strings
+    event_fields = {
+        '4':  uid,                  # user_id
+        '5':  str(evt_time),        # event_time
+        '6':  etype,                # event_type
+        '7':  card,                 # card_number
+        '8':  str(amount),          # amount
+        '9':  direction,            # direction
+        '11': merchant,             # merchant_id
+        '18': txn_id,               # transaction_id
+        '19': category,             # category
+        '25': country,              # country
+    }
+
     record = {
+        'userId': uid,
+        'time': evt_time,
         'eventId': f'evt-{i:06d}',
         'eventType': etype,
-        'userId': uid,
-        'eventTime': evt_time,
-        'processingTime': proc_time,
-        'featureMap': feature_map
+        'processTime': proc_time,
+        'rules': [1],
+        'actions': ['REJECT'] if random.random() > 0.8 else ['APPROVE'],
+        'actionMap': {'1': {'REJECT': 'test'}} if random.random() > 0.8 else {},
+        'clusterName': 'demo',
+        'originCategory': 'REALTIME',
+        'synthetic': False,
+        'originId': -1,
+        'fromUpdateAPI': False,
+        'pciEncryptionStatus': 0,
+        'featureMap': feature_map,
+        'eventFields': event_fields,
     }
     out.append(json.dumps(record, separators=(',',':')))
 

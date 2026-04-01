@@ -30,3 +30,23 @@ INSERT INTO feature (id, name, status, return_type) VALUES
     (593, 'merchant_id',       'PUBLISHED', 'String'),
     (595, 'kg_window',         'PUBLISHED', 'Long')
 ON DUPLICATE KEY UPDATE name=VALUES(name), status=VALUES(status), return_type=VALUES(return_type);
+
+CREATE TABLE IF NOT EXISTS event_attribute_info (
+    id          INT PRIMARY KEY,
+    name        VARCHAR(255) NOT NULL,
+    type        VARCHAR(50)  NOT NULL DEFAULT 'String'
+);
+
+INSERT INTO event_attribute_info (id, name, type) VALUES
+    (1,  'time',            'Long'),
+    (4,  'user_id',         'String'),
+    (5,  'event_time',      'String'),
+    (6,  'event_type',      'String'),
+    (7,  'card_number',     'String'),
+    (8,  'amount',          'Double'),
+    (9,  'direction',       'String'),
+    (11, 'merchant_id',     'String'),
+    (18, 'transaction_id',  'String'),
+    (19, 'category',        'String'),
+    (25, 'country',         'String')
+ON DUPLICATE KEY UPDATE name=VALUES(name), type=VALUES(type);

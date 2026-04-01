@@ -102,7 +102,7 @@ The `FeatureResolverTransform` is a Kafka Connect Single Message Transform that:
 3. **Per message**: takes `{"featureMap": {"42": 100.50, "57": "US"}}`, looks up each integer key, outputs a flat struct with named fields `{txn_amount: "100.50", country: "US"}`
 4. **Schema evolution**: if new feature IDs appear in MySQL, the SMT rebuilds its schema — Iceberg auto-adds new columns
 
-Source: `smt/src/main/java/com/datavisor/demo/smt/FeatureResolverTransform.java`
+Source: `smt/src/main/java/com/datavisor/smt/FeatureResolverTransform.java`
 
 ## Benchmarking
 
@@ -197,7 +197,7 @@ docker compose down -v
 │   └── 01-feature-metadata.sql     # Seeds the feature table (id→name mappings)
 ├── smt/
 │   ├── pom.xml                     # Maven project for the Custom SMT
-│   └── src/main/java/com/datavisor/demo/smt/
+│   └── src/main/java/com/datavisor/smt/
 │       └── FeatureResolverTransform.java  # The SMT: MySQL JDBC → resolve IDs → named columns
 ├── trino/catalog/
 │   └── iceberg.properties          # Trino Iceberg catalog config
