@@ -176,6 +176,22 @@ services:
       timeout: 10s
       retries: 15
 
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    hostname: clickhouse
+    container_name: clickhouse
+    ports:
+      - "8123:8123"   # HTTP API (used by migration/export.py)
+    volumes:
+      - ./migration/clickhouse-init:/docker-entrypoint-initdb.d
+    networks:
+      - iceberg-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8123/ping || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   starrocks:
     image: starrocks/allin1-ubuntu:latest
     hostname: starrocks
