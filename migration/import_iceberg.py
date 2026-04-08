@@ -130,6 +130,29 @@ def ensure_table(catalog, tenant: str):
 # Per-day import with batch streaming
 # ---------------------------------------------------------------------------
 
+def _require_list_elements(batch: pa.RecordBatch) -> pa.RecordBatch:
+    """Cast list columns to non-nullable elements to match Iceberg's element-required=true.
+
+    ClickHouse FORMAT Parquet writes list elements as nullable, but the Iceberg table
+    (auto-created by Kafka Connect) marks them as required. PyIceberg rejects the
+    mismatch — this cast fixes it without changing any data values.
+    """
+    new_arrays = []
+    new_fields = []
+    for i, field in enumerate(batch.schema):
+        arr = batch.column(i)
+        if pa.types.is_list(field.type) and field.type.value_field.nullable:
+            val = field.type.value_field
+            new_list_type = pa.list_(pa.field(val.name, val.type, nullable=False))
+            new_arr = pa.ListArray.from_arrays(arr.offsets, arr.values, type=new_list_type)
+            new_fields.append(pa.field(field.name, new_list_type, nullable=field.nullable))
+            new_arrays.append(new_arr)
+        else:
+            new_fields.append(field)
+            new_arrays.append(arr)
+    return pa.RecordBatch.from_arrays(new_arrays, schema=pa.schema(new_fields, batch.schema.metadata))
+
+
 def import_day(tenant: str, yyyymmdd: int, s3_staging: str,
                catalog, fs: s3fs.S3FileSystem, dry_run: bool) -> bool:
     """Stream one day's Parquet file into the Iceberg table in batches."""
@@ -138,8 +161,7 @@ def import_day(tenant: str, yyyymmdd: int, s3_staging: str,
 
     print(f"  Checking {s3_path} ...", flush=True)
     if not fs.exists(s3_path_bare):
-        print(f"  ERROR: staging file not found: {s3_path}", file=sys.stderr)
-        return False
+        return None  # no staging file for this day — skip silently
 
     pf = pq.ParquetFile(s3_path_bare, filesystem=fs)
     total_rows = pf.metadata.num_rows
@@ -154,6 +176,7 @@ def import_day(tenant: str, yyyymmdd: int, s3_staging: str,
 
     appended = 0
     for batch in pf.iter_batches(batch_size=BATCH_SIZE):
+        batch = _require_list_elements(batch)
         table.append(pa.Table.from_batches([batch]))
         appended += len(batch)
         print(f"  ... {appended:,}/{total_rows:,} rows", flush=True)
@@ -207,10 +230,14 @@ def run(args):
 
         print(f"[{yyyymmdd}] Importing ...", flush=True)
         try:
-            success = import_day(
+            result = import_day(
                 args.tenant, yyyymmdd, args.s3_staging, catalog, fs, args.dry_run
             )
-            if success:
+            if result is None:
+                # No staging file for this day — not an error, just nothing to import
+                print(f"[{yyyymmdd}] SKIP (no staging file)")
+                skipped += 1
+            elif result:
                 state[key] = "DONE"
                 save_state(args.tenant, state)
                 print(f"[{yyyymmdd}] OK")
@@ -218,7 +245,7 @@ def run(args):
             else:
                 state[key] = "FAILED"
                 save_state(args.tenant, state)
-                print(f"[{yyyymmdd}] FAILED (file missing)")
+                print(f"[{yyyymmdd}] FAILED")
                 failed += 1
         except Exception as e:
             state[key] = "FAILED"

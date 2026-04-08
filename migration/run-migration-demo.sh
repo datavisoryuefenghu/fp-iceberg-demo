@@ -50,19 +50,25 @@ echo ""
 
 # ── 3.5. Install Python dependencies ─────────────────────────────────────────
 echo "Installing Python dependencies..."
-pip3 install -q -r "$SCRIPT_DIR/requirements.txt"
+VENV_DIR="$SCRIPT_DIR/.venv"
+if [ ! -d "$VENV_DIR" ]; then
+  echo "  Creating Python virtual environment..."
+  python3 -m venv "$VENV_DIR"
+fi
+PYTHON="$VENV_DIR/bin/python3"
+"$PYTHON" -m pip install -q -r "$SCRIPT_DIR/requirements.txt"
 echo "  Done."
 echo ""
 
 # ── 4. Export ─────────────────────────────────────────────────────────────────
 echo "[3/4] Exporting ClickHouse demo data → MinIO staging..."
 echo "  Days: 20240101, 20240102"
-python3 "$SCRIPT_DIR/export.py" --date 20240101 20240102
+"$PYTHON" "$SCRIPT_DIR/export.py" --date 20240101 20240102
 echo ""
 
 # ── 5. Import ─────────────────────────────────────────────────────────────────
 echo "[4/4] Importing MinIO staging → Iceberg..."
-python3 "$SCRIPT_DIR/import_iceberg.py" \
+"$PYTHON" "$SCRIPT_DIR/import_iceberg.py" \
   --tenant          "$TENANT"       \
   --start-month     "$START_MONTH"  \
   --end-month       "$END_MONTH"    \
@@ -77,10 +83,15 @@ echo ""
 echo "=== Verification via StarRocks ==="
 echo ""
 
-# Row count
-echo "Row count in Iceberg (should be 18 = 10 day1 + 8 day2):"
+# Migrated rows (2024-01-01 and 2024-01-02 only)
+echo "Migrated row count by day (should be: 2024-01-01=10, 2024-01-02=8):"
 docker exec starrocks mysql -P 9030 -h 127.0.0.1 -u root --table -e \
-  "SET CATALOG iceberg_catalog; SELECT count(*) AS total_rows FROM demo.event_result;" \
+  "SET CATALOG iceberg_catalog;
+   SELECT date(from_unixtime(processingTime / 1000)) AS day, count(*) AS row_count
+   FROM demo.event_result
+   WHERE processingTime >= 1704067200000 AND processingTime < 1704240000000
+   GROUP BY 1
+   ORDER BY 1;" \
   2>/dev/null
 
 echo ""
@@ -89,18 +100,15 @@ docker exec starrocks mysql -P 9030 -h 127.0.0.1 -u root --table -e \
   "SET CATALOG iceberg_catalog;
    SELECT eventId, eventType, userId, amount, country, merchant_id, transaction_id
    FROM demo.event_result
+   WHERE processingTime >= 1704067200000 AND processingTime < 1704240000000
    ORDER BY eventId
    LIMIT 10;" \
   2>/dev/null
 
 echo ""
-echo "Row count by day (processingTime → date):"
+echo "Total rows in table (migrated + live events):"
 docker exec starrocks mysql -P 9030 -h 127.0.0.1 -u root --table -e \
-  "SET CATALOG iceberg_catalog;
-   SELECT date(from_unixtime(processingTime / 1000)) AS day, count(*) AS rows
-   FROM demo.event_result
-   GROUP BY 1
-   ORDER BY 1;" \
+  "SET CATALOG iceberg_catalog; SELECT count(*) AS total_rows FROM demo.event_result;" \
   2>/dev/null
 
 echo ""
@@ -110,6 +118,6 @@ echo "What happened:"
 echo "  1. ClickHouse was seeded with 18 historical event_result rows (2 days)"
 echo "  2. export.py read each day via CH HTTP API and wrote Parquet to MinIO staging"
 echo "  3. import_iceberg.py loaded each Parquet file and appended to Iceberg via REST catalog"
-echo "  4. StarRocks confirmed all 18 rows are queryable as Iceberg"
+echo "  4. StarRocks confirmed the 18 migrated rows are queryable alongside live event data"
 echo ""
 echo "State file: migration/migration_state_${TENANT}.json (delete to force re-run)"

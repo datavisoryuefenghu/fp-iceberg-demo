@@ -166,6 +166,7 @@ services:
       - "8123:8123"   # HTTP API (used by migration/export.py)
     volumes:
       - ./migration/clickhouse-init:/docker-entrypoint-initdb.d
+      - ./migration/clickhouse-config:/etc/clickhouse-server/users.d
     networks:
       - iceberg-net
     healthcheck:
