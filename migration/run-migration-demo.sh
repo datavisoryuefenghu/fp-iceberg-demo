@@ -48,6 +48,12 @@ done
 echo "  Iceberg REST ready."
 echo ""
 
+# ── 3.5. Install Python dependencies ─────────────────────────────────────────
+echo "Installing Python dependencies..."
+pip3 install -q -r "$SCRIPT_DIR/requirements.txt"
+echo "  Done."
+echo ""
+
 # ── 4. Export ─────────────────────────────────────────────────────────────────
 echo "[3/4] Exporting ClickHouse demo data → MinIO staging..."
 echo "  Days: 20240101, 20240102"
