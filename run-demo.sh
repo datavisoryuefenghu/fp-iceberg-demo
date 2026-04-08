@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== FP Iceberg Demo: Integer-keyed events → SMT (MySQL JDBC) → Iceberg → Trino/StarRocks ==="
+echo "=== FP Iceberg Demo: Integer-keyed events → SMT (MySQL JDBC) → Iceberg → StarRocks ==="
 echo ""
 
 # 1. Build & start
@@ -11,7 +11,7 @@ echo ""
 
 # 2. Wait for health
 echo "[2/6] Waiting for services to be healthy..."
-for svc in kafka-connect trino starrocks; do
+for svc in kafka-connect starrocks; do
   printf "  waiting for $svc..."
   until docker inspect --format='{{.State.Health.Status}}' "$svc" 2>/dev/null | grep -q healthy; do
     sleep 5
@@ -38,7 +38,7 @@ sleep 30
 echo ""
 
 # 6. Query
-echo "[6/6] Querying from both engines..."
+echo "[6/6] Querying via StarRocks..."
 ./query-iceberg.sh
 
 echo ""
@@ -49,6 +49,6 @@ echo "  1. MySQL was seeded with feature_metadata table (id→name mappings) on 
 echo "  2. Events with integer-keyed featureMap (e.g. {\"42\": 100.50}) were sent to 'velocity-al'"
 echo "  3. Custom SMT in Kafka Connect queried MySQL to resolve integer keys → named columns"
 echo "  4. Iceberg Sink wrote Parquet files with human-readable column names to MinIO"
-echo "  5. Both Trino and StarRocks can query: SELECT txn_amount, country FROM event_result"
+echo "  5. StarRocks can query: SELECT txn_amount, country FROM event_result"
 echo ""
-echo "Next: run ./benchmark.sh 10000 to compare engine performance"
+echo "Next: run ./benchmark.sh 10000 to benchmark StarRocks query performance"

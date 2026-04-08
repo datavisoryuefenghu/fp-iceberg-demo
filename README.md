@@ -1,6 +1,6 @@
-# Iceberg Feature Platform Demo — Trino vs StarRocks
+# Iceberg Feature Platform Demo
 
-End-to-end demo that simulates the Feature Platform's Iceberg storage pipeline. Events with **integer-keyed feature maps** flow through Kafka, get resolved to **named columns** by a Custom SMT (reading feature metadata from MySQL), and land in Iceberg on S3 — queryable by both Trino and StarRocks.
+End-to-end demo that simulates the Feature Platform's Iceberg storage pipeline. Events with **integer-keyed feature maps** flow through Kafka, get resolved to **named columns** by a Custom SMT (reading feature metadata from MySQL), and land in Iceberg on S3 — queryable by StarRocks.
 
 ```
                           MySQL (feature table)
@@ -17,8 +17,8 @@ produce-events.sh ──▶ Kafka (velocity-al) ──▶ Kafka Connect
                                            Iceberg Sink ──▶ MinIO (S3)
                                                   │
                                            REST Catalog (MySQL)
-                                              ╱        ╲
-                                          Trino      StarRocks
+                                                  │
+                                            StarRocks
                                    SELECT txn_amount, country
                                    FROM demo.event_result
 ```
@@ -30,7 +30,7 @@ This demo validates the CRE-6630 Iceberg storage design:
 1. **Kafka Connect + Custom SMT** can subscribe to the existing `velocity-al` topic alongside `ConsumerForCH` — zero changes to the producer
 2. **Integer ID → column name resolution** works via JDBC to the existing MySQL `feature` table (cached, refreshed every 60s)
 3. **Iceberg auto-creates** the table with proper columns as the SMT resolves them
-4. **Both Trino and StarRocks** can query the same Iceberg table with human-readable column names
+4. **StarRocks** can query the Iceberg table with human-readable column names
 
 ## Prerequisites
 
@@ -43,7 +43,7 @@ This demo validates the CRE-6630 Iceberg storage design:
 
 > **No other host dependencies.** The SMT JAR is compiled inside Docker (multi-stage build). All SQL clients run inside the containers via `docker exec`.
 
-## Services (8 containers)
+## Services (7 containers)
 
 | Service | Ports | Purpose |
 |---|---|---|
@@ -53,7 +53,6 @@ This demo validates the CRE-6630 Iceberg storage design:
 | **MySQL** | 3306 | Iceberg catalog backend + feature metadata (id→name) |
 | **Iceberg REST Catalog** | 8181 | Apache Iceberg REST catalog server |
 | **Kafka Connect** | 8083 | Iceberg sink connector + Custom SMT |
-| **Trino** | 8080 | SQL query engine (Java, widely adopted) |
 | **StarRocks** | 9030 (SQL), 8030 (HTTP UI) | SQL query engine (C++ vectorized, MPP) |
 
 ## Quick Start
@@ -106,7 +105,7 @@ Source: `smt/src/main/java/com/datavisor/smt/FeatureResolverTransform.java`
 
 ## Benchmarking
 
-Compare query performance between Trino and StarRocks on the same Iceberg table:
+Measure StarRocks query performance on the Iceberg table:
 
 ```bash
 # Default: 10,000 events
@@ -118,15 +117,11 @@ Compare query performance between Trino and StarRocks on the same Iceberg table:
 
 Runs 4 queries (full scan, aggregation, filter, top-N) and reports **avg (min-max)** over 3 runs.
 
-> **Note on StarRocks cold start:** The first query against an Iceberg external catalog is slow because StarRocks must fetch table metadata from the REST catalog, read manifest files from S3, initialize the S3 client, and parse Parquet footers. All of this is cached after the first query — subsequent queries are significantly faster. The benchmark script runs a warmup query before timing to avoid skewed results. In production with a long-running cluster, the metadata cache stays warm.
+> **Note on cold start:** The first query against an Iceberg external catalog is slow because StarRocks must fetch table metadata from the REST catalog, read manifest files from S3, initialize the S3 client, and parse Parquet footers. All of this is cached after the first query — subsequent queries are significantly faster. The benchmark script runs a warmup query before timing to avoid skewed results.
 
 ## Interactive SQL
 
 ```bash
-# Trino
-docker exec -it trino trino
-# trino> SELECT * FROM iceberg.demo.event_result LIMIT 5;
-
 # StarRocks
 docker exec -it starrocks mysql -P 9030 -h 127.0.0.1 -u root
 # mysql> SET CATALOG iceberg_catalog;
@@ -157,8 +152,6 @@ All credentials are centralized in **`.env`** (copied from `.env.example`, gitig
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | `admin` / `password` | Iceberg REST, Kafka Connect |
 | `AWS_REGION` | `us-east-1` | Iceberg REST, Kafka Connect |
 
-> **Note:** The Trino catalog config (`trino/catalog/iceberg.properties`) is a static file mounted into the container. If you change S3 credentials in `.env`, update that file to match.
-
 ## Persistence
 
 Iceberg data (MinIO) and catalog metadata (MySQL) are stored in Docker volumes. They survive `docker compose down` (without `-v`):
@@ -182,7 +175,7 @@ docker compose down -v
 | StarRocks never becomes healthy | Increase Docker RAM to 8+ GB. Check `docker logs starrocks`. |
 | `query-iceberg.sh` returns no data | Wait 30s after producing events (Iceberg commit interval is 10s). |
 | `avg()` / `sum()` fails on feature columns | Feature values are stored as `varchar`. Use `CAST(column AS double)`. |
-| Port conflict (e.g. 8080 already in use) | Change the **host** port in `docker-compose.yml` (e.g. `"18080:8080"`). |
+| Port conflict on 8030/9030 | Change the **host** port in `docker-compose.yml`. |
 | `produce-events.sh` fails with python error | Ensure `python3` is installed on your host (`python3 --version`). |
 
 ## Project Structure
@@ -190,7 +183,7 @@ docker compose down -v
 ```
 .
 ├── .env.example                    # Default configuration (copy to .env)
-├── docker-compose.yml              # All 8 services
+├── docker-compose.yml              # All 7 services
 ├── Dockerfile.connect              # Multi-stage: builds SMT JAR + Kafka Connect image
 ├── Dockerfile.iceberg-rest         # Iceberg REST catalog + MySQL JDBC driver
 ├── mysql-init/
@@ -199,13 +192,11 @@ docker compose down -v
 │   ├── pom.xml                     # Maven project for the Custom SMT
 │   └── src/main/java/com/datavisor/smt/
 │       └── FeatureResolverTransform.java  # The SMT: MySQL JDBC → resolve IDs → named columns
-├── trino/catalog/
-│   └── iceberg.properties          # Trino Iceberg catalog config
 ├── register-connector.sh           # Register Kafka Connect sink with SMT config
 ├── register-starrocks-catalog.sh   # Register StarRocks Iceberg external catalog
 ├── produce-events.sh               # Generate events with integer-keyed featureMap
-├── query-iceberg.sh                # Query both engines
-├── benchmark.sh                    # Timed benchmark comparison
+├── query-iceberg.sh                # Query via StarRocks
+├── benchmark.sh                    # Timed StarRocks benchmark
 ├── run-demo.sh                     # One-command end-to-end demo
 └── README.md
 ```

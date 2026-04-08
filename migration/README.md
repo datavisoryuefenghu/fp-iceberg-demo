@@ -15,7 +15,7 @@ docker compose up -d --build
 Then install the Python dependencies for the migration scripts:
 
 ```bash
-pip install -r migration/requirements.txt
+pip3 install -r migration/requirements.txt
 ```
 
 ## What This Demonstrates
@@ -34,7 +34,7 @@ MinIO: warehouse/migration-staging/demo/{YYYYMMDD}/data.parquet
 Iceberg: demo.event_result  (same table the live Kafka pipeline writes to)
     │
     ▼
-StarRocks / Trino  — migrated rows queryable alongside live rows
+StarRocks  — migrated rows queryable alongside live rows
 ```
 
 ## Running the Migration Demo

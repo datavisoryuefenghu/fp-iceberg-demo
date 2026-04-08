@@ -157,25 +157,6 @@ services:
       timeout: 10s
       retries: 15
 
-  trino:
-    image: trinodb/trino:439
-    hostname: trino
-    container_name: trino
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./trino/catalog:/etc/trino/catalog
-    depends_on:
-      iceberg-rest:
-        condition: service_healthy
-    networks:
-      - iceberg-net
-    healthcheck:
-      test: ["CMD-SHELL", "trino --execute 'SELECT 1' || exit 1"]
-      interval: 10s
-      timeout: 10s
-      retries: 15
-
   clickhouse:
     image: clickhouse/clickhouse-server:24.3
     hostname: clickhouse
