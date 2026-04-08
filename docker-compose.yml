@@ -158,6 +158,7 @@ services:
       retries: 15
 
   clickhouse:
+    profiles: ["migration"]   # not started by default; run-migration-demo.sh starts it automatically
     image: clickhouse/clickhouse-server:24.3
     hostname: clickhouse
     container_name: clickhouse

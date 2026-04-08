@@ -26,17 +26,14 @@ TENANT="demo"
 START_MONTH="202401"
 END_MONTH="202401"
 
-# ── 1. Check stack is running ─────────────────────────────────────────────────
+# ── 1. Start ClickHouse (migration profile) ───────────────────────────────────
 echo "=== FP Iceberg Migration Demo ==="
 echo ""
-if ! docker inspect clickhouse >/dev/null 2>&1; then
-  echo "ERROR: ClickHouse container not found."
-  echo "Run 'docker compose up -d' from $DEMO_DIR first."
-  exit 1
-fi
+echo "[1/4] Starting ClickHouse (migration profile)..."
+docker compose --profile migration up -d clickhouse
 
 # ── 2. Wait for ClickHouse ────────────────────────────────────────────────────
-echo "[1/4] Waiting for ClickHouse to be healthy..."
+echo "  Waiting for ClickHouse to be healthy..."
 until curl -sf http://localhost:8123/ping >/dev/null 2>&1; do
   sleep 2
 done
