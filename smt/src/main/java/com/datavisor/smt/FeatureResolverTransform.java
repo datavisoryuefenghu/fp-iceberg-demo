@@ -158,8 +158,8 @@ public class FeatureResolverTransform<R extends ConnectRecord<R>> implements Tra
         setIfPresent(struct, schema, "eventId",           toString(value.get("eventId")));
         setIfPresent(struct, schema, "eventType",          toString(value.get("eventType")));
         setIfPresent(struct, schema, "userId",             toString(value.get("userId")));
-        setIfPresent(struct, schema, "eventTime",          toLong(value.get("time")));
-        setIfPresent(struct, schema, "processingTime",     toLong(value.get("processTime")));
+        setIfPresent(struct, schema, "eventTime",          toDate(value.get("time")));
+        setIfPresent(struct, schema, "processingTime",     toDate(value.get("processTime")));
         setIfPresent(struct, schema, "rules",              toIntList(value.get("rules")));
         setIfPresent(struct, schema, "actions",            toStringList(value.get("actions")));
         setIfPresent(struct, schema, "trialRules",         toIntList(value.get("trialRules")));
@@ -210,8 +210,8 @@ public class FeatureResolverTransform<R extends ConnectRecord<R>> implements Tra
         builder.field("eventId",          Schema.OPTIONAL_STRING_SCHEMA);
         builder.field("eventType",         Schema.OPTIONAL_STRING_SCHEMA);
         builder.field("userId",            Schema.OPTIONAL_STRING_SCHEMA);
-        builder.field("eventTime",         Schema.OPTIONAL_INT64_SCHEMA);
-        builder.field("processingTime",    Schema.OPTIONAL_INT64_SCHEMA);
+        builder.field("eventTime",         org.apache.kafka.connect.data.Timestamp.builder().optional().build());
+        builder.field("processingTime",    org.apache.kafka.connect.data.Timestamp.builder().optional().build());
         builder.field("rules",             SchemaBuilder.array(Schema.INT32_SCHEMA).optional().build());
         builder.field("actions",           SchemaBuilder.array(Schema.STRING_SCHEMA).optional().build());
         builder.field("trialRules",        SchemaBuilder.array(Schema.INT32_SCHEMA).optional().build());
@@ -303,6 +303,18 @@ public class FeatureResolverTransform<R extends ConnectRecord<R>> implements Tra
         if (v == null) return null;
         if (v instanceof Number) return ((Number) v).longValue();
         return Long.parseLong(v.toString());
+    }
+
+    /**
+     * Convert a seconds-or-milliseconds epoch value to java.util.Date (milliseconds).
+     * Values > 1_000_000_000_000 are treated as milliseconds, otherwise seconds.
+     * Kafka Connect Timestamp schema accepts java.util.Date internally as milliseconds.
+     */
+    private java.util.Date toDate(Object v) {
+        if (v == null) return null;
+        long val = toLong(v);
+        long ms = val > 1_000_000_000_000L ? val : val * 1000L;
+        return new java.util.Date(ms);
     }
 
     private Double toDouble(Object v) {

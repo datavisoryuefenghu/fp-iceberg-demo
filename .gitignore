@@ -1,3 +1,4 @@
 warehouse-local/
 .env
 smt/target/
+smt/dependency-reduced-pom.xml
