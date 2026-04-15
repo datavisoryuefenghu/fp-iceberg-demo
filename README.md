@@ -77,14 +77,20 @@ docker compose ps
 # 6. Register the StarRocks Iceberg catalog
 ./register-starrocks-catalog.sh
 
-# 7. Produce sample events (integer-keyed featureMap)
+# 7. Install AuditLoader plugin (records query metrics automatically)
+./setup-audit-loader.sh
+
+# 8. Produce sample events (integer-keyed featureMap)
 ./produce-events.sh 200
 
-# 8. Wait for the Iceberg commit (~30s)
-sleep 30
+# 9. Wait for the Iceberg commit (~45s)
+sleep 45
 
-# 9. Query from both engines — columns are resolved!
+# 10. Query — columns are resolved!
 ./query-iceberg.sh
+
+# 11. View query resource metrics
+./query-audit.sh
 ```
 
 Or run everything at once:
@@ -102,6 +108,83 @@ The `FeatureResolverTransform` is a Kafka Connect Single Message Transform that:
 4. **Schema evolution**: if new feature IDs appear in MySQL, the SMT rebuilds its schema — Iceberg auto-adds new columns
 
 Source: `smt/src/main/java/com/datavisor/smt/FeatureResolverTransform.java`
+
+## Query Audit Log
+
+Every query executed against StarRocks is automatically recorded in a native OLAP table via the **AuditLoader plugin**. This enables post-execution analysis of resource usage without any overhead on query execution.
+
+### Setup
+
+Installed automatically by `run-demo.sh` (step 5) or manually:
+
+```bash
+./setup-audit-loader.sh
+```
+
+Creates `starrocks_audit_db__.starrocks_audit_tbl__` and installs the plugin. Queries appear in the table within **5 seconds** (demo setting — production default is 60s).
+
+### Query the audit table
+
+```bash
+./query-audit.sh
+```
+
+Or interactively:
+
+```sql
+-- Recent Iceberg queries with resource metrics
+SELECT
+    DATE_FORMAT(timestamp, '%H:%i:%S') AS time,
+    queryTime                          AS wall_ms,
+    scanBytes                          AS scan_bytes,
+    scanRows                           AS scan_rows,
+    ROUND(cpuCostNs / 1e6, 2)         AS cpu_ms,
+    ROUND(memCostBytes / 1024 / 1024, 2) AS mem_mb,
+    stmt                               AS query
+FROM starrocks_audit_db__.starrocks_audit_tbl__
+WHERE isQuery = 1
+  AND catalog = 'iceberg_catalog'
+ORDER BY timestamp DESC
+LIMIT 20\G
+
+-- Top queries by CPU cost
+SELECT ROUND(cpuCostNs / 1e6, 2) AS cpu_ms, scanBytes, scanRows, queryTime, stmt
+FROM starrocks_audit_db__.starrocks_audit_tbl__
+WHERE isQuery = 1 AND catalog = 'iceberg_catalog'
+ORDER BY cpuCostNs DESC LIMIT 10;
+
+-- Failed queries
+SELECT timestamp, state, errorCode, stmt
+FROM starrocks_audit_db__.starrocks_audit_tbl__
+WHERE state != 'EOF'
+ORDER BY timestamp DESC LIMIT 10;
+```
+
+### Key fields
+
+| Field | Description |
+|---|---|
+| `queryTime` | Wall time in ms (end-to-end latency) |
+| `scanBytes` | Bytes actually read from S3/MinIO |
+| `scanRows` | Rows scanned from Parquet files |
+| `returnRows` | Rows returned to the client |
+| `cpuCostNs` | CPU time in nanoseconds |
+| `memCostBytes` | Memory allocated for the query |
+| `state` | `EOF` = success, `ERR` = failed |
+| `planCpuCosts` | Planner cost units (abstract, for plan comparison) |
+
+### Using audit data for resource scheduling
+
+The correlation `scanBytes → wall_ms` is stable for a given cluster. Combine with `EXPLAIN COSTS` (pre-execution, ~20ms, no S3 reads) to predict resource needs before a query runs:
+
+```
+EXPLAIN COSTS   → scan_bytes (exact, from Iceberg manifests, free)
+Audit history   → k = avg(wall_ms / scan_bytes)
+Predicted cost  → wall_ms = scan_bytes × k
+Recommended CNs → max(1, predicted_wall_ms / target_wall_ms)
+```
+
+---
 
 ## Benchmarking
 
@@ -194,9 +277,11 @@ docker compose down -v
 │       └── FeatureResolverTransform.java  # The SMT: MySQL JDBC → resolve IDs → named columns
 ├── register-connector.sh           # Register Kafka Connect sink with SMT config
 ├── register-starrocks-catalog.sh   # Register StarRocks Iceberg external catalog
+├── setup-audit-loader.sh           # Install StarRocks AuditLoader plugin
 ├── produce-events.sh               # Generate events with integer-keyed featureMap
-├── query-iceberg.sh                # Query via StarRocks
+├── query-iceberg.sh                # Query Iceberg data via StarRocks
+├── query-audit.sh                  # Query audit table for resource metrics
 ├── benchmark.sh                    # Timed StarRocks benchmark
-├── run-demo.sh                     # One-command end-to-end demo
+├── run-demo.sh                     # One-command end-to-end demo (8 steps)
 └── README.md
 ```
